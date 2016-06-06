@@ -6,10 +6,13 @@ import math
 import sys
 from time import sleep
 from vlc import VLC
-from lib import Library
+from lib_db import Library
 from user import User
 from sound import Sound
 from util import color
+from util import readline
+from util import read_single_keypress as getch
+# from util import getch
 # from getch import _Getch
 
 class Menu():
@@ -34,7 +37,7 @@ class Menu():
 			with color('yellow'):
 				print "输入首字母搜索   (B)浏览歌曲   (V)原唱/伴唱   (N)下一首   (P)暂停/继续"
 			print "\n\n\n\n"
-			cmd = raw_input("Kanraoke > ")
+			cmd = readline("Kanraoke > ")
 			cmd = cmd.strip()
 			if cmd:
 				if cmd == "quit" or cmd == "q":
@@ -127,8 +130,9 @@ class Menu():
 
 	def _clear_list(self):
 		while True:
-			resp = raw_input("Are you sure to clear the list? [Y/N]\n")
+			resp = getch("Are you sure to clear the list? [Y/N] ")
 			resp = resp.lower()
+			print
 			if resp == "y":
 				self.player.clear()
 				return
@@ -180,43 +184,38 @@ class Menu():
 				if operation_type == "menu":
 					print "===================="
 				else:
-					print "========= PAGE: %d/%d ===========" % (page+1, max_page)
+					print "\n"*50+"========= PAGE: %d/%d ===========" % (page+1, max_page)
 				for i in range(10):
 					if page * 10 + i >= size:
 						break
 					item = l[page * 10 + i]
 					prefix = i + 1 if i < 9 else 0
 					if operation_type == "song":
-						Library.display_song(item[0], prefix)
+						Library.display_song(item, prefix)
 					elif operation_type == "artist":
 						Library.display_artist(item, prefix)
 					elif operation_type == "menu":
 						Menu.display_menu(item, prefix)
 				print "===================="
 				print "(Nums)选择   (N)下一页   (P)上一页   (B)后退   (M)主菜单\n"
-				sys.stdout.write("please select > ")
 				valid_selection = False
+				sys.stdout.write("please select > ")
 				while not valid_selection:
-					select = util.getch()
+					select = getch()
 					if select == "b":
-						print select + "\n"
 						return
 					if select == "m":
-						print select + "\n"
 						return True
 					elif select == "n":
 						new_page = min(page + 1, max_page - 1)
 						if page != new_page:
 							page = new_page
-							print select + "\n"
 							valid_selection = True
 						continue
 					elif select == "p":
 						new_page = max(page - 1, 0)
 						if page != new_page:
-							print "correct"
 							page = new_page
-							print select + "\n"
 							valid_selection = True
 						continue
 					elif select.isdigit():
@@ -269,7 +268,7 @@ class Menu():
 				print "\tMMMMMMMMMMMMMMMMMWWNNXKOkdolc:::::cclodkOXNWMMMMMMMMMMMMMMMM"
 				print "\tMMMMMMMMMMMMMMMMMMMMMMMWWWWWNNNNNNWWMMMMMMMMMMMMMMMMMMMMMMMM"
 				print "\n"
-			raw_input("It seems your query does not match any record in our library, press ENTER to continue...  ")
+			getch("It seems your query does not match any record in our library, press ENTER to continue...  ")
 			return
 
 	def _select(self, selection, t, param):
@@ -278,7 +277,7 @@ class Menu():
 			if song and util.add_to_playlist(self.player, song):
 				with color('yellow'):
 					sys.stdout.write("\nSong added: ")
-					Library.display_song(song[0])
+					Library.display_song(song)
 					print
 					sleep(.5)
 			else:
@@ -286,8 +285,8 @@ class Menu():
 		elif t == "artist":
 			artist = selection
 			if artist:
-				name = artist["name"]
-				songs = self.lib.get_song_by_artist(name)
+				aid = artist["id"]
+				songs = self.lib.get_song_by_artist(aid)
 				return self.display_list(songs, "song")
 		elif t == "menu":
 			if selection:

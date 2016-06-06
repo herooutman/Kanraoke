@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 import sys
 import os
+import signal
 import vlc
 import argparse
 from util import Constant
@@ -38,11 +39,17 @@ def main():
 		player.initial_player()
 		print "Loading library."
 		Library()
+		signal.signal(signal.SIGINT, send_kill)
 		menu = Menu()
 		menu.start()
 	else:
 		print "Cannot connect to the player..."
 		return
+
+def send_kill(signum, fram):
+	print
+	print "exit."
+	sys.exit()
 
 if __name__ == '__main__':
 	main()

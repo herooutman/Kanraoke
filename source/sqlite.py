@@ -2,11 +2,19 @@
 # -*- coding: utf-8 -*-
 import sqlite3
 import sys
+import os
+import json
+from util import Constant
 reload(sys)
 sys.setdefaultencoding('utf8')
 
 def connect(dbfile):
-	return sqlite3.connect(dbfile)
+	if os.path.isfile(Constant.db_lib_file):
+		return sqlite3.connect(dbfile)
+	else:
+		db = sqlite3.connect(Constant.db_lib_file)
+		init_lib(db)
+		return db
 
 def close(conn):
 	conn.close()
@@ -39,12 +47,19 @@ def query(conn, sql, para=None):
 
 def init_lib(conn):
 	# create song table
-	sql = """CREATE TABLE song (id INTEGER PRIMARY KEY, name TEXT, loc TEXT NOT NULL UNIQUE, artists TEXT, initials TEXT, rank INTEGER, words INTEGER, lang, TEXT, time TEXT)"""
+	sql = """CREATE TABLE song (id INTEGER PRIMARY KEY, name TEXT, loc TEXT NOT NULL UNIQUE, artists TEXT, initials TEXT, rank INTEGER, words INTEGER, lang TEXT, time TEXT)"""
 	commit(conn, sql)
 	sql = """CREATE TABLE artist (id INTEGER PRIMARY KEY, name TEXT, initials TEXT, song_number INTEGER)"""
 	commit(conn, sql)
 	sql = """CREATE TABLE sing (id INTEGER PRIMARY KEY, sid INTEGER NOT NULL, aid INTEGER NOT NULL, UNIQUE(sid, aid) ON CONFLICT IGNORE)"""
 	commit(conn, sql)
+	with open(Constant.lib_file, "r") as fd:
+		old_lib = json.load(fd)
+		artists = old_lib["artists"]
+		songs = old_lib["songs"]
+		insert_songs(conn, songs)
+		insert_artists(conn, artists, songs)
+
 
 def wrap_song(song):
 	lang = song.get('lang', '')
@@ -69,10 +84,39 @@ def wrap_artist(artist):
 	name = artist.get('name', '')
 	songs = artist.get('songs', None)
 	if not songs:
-		raw_input("empty artist: " + name)
+		# raw_input("empty artist: " + name)
 		return None
 	else:
 		return initials, name, songs
+
+def unwrap_songs(songs):
+	return [unwrap_song(song) for song in songs]
+
+def unwrap_song(song):
+	sid, name, loc, artists, initials, rank, words, lang, time = song
+	ret = dict()
+	ret['id'] = sid
+	ret['lang'] = lang
+	ret['loc'] = loc
+	ret['name'] = name
+	ret['artists'] = artists.split("###")
+	ret['initials'] = initials
+	ret['rank'] = rank
+	ret['words'] = words
+	ret['time'] = time
+	return ret
+
+def unwrap_artists(artists):
+	return [unwrap_artist(artist) for artist in artists]
+
+def unwrap_artist(artist):
+	aid, name, initials, song_number = artist
+	ret = dict()
+	ret['id'] = aid
+	ret['name'] = name
+	ret['initials'] = initials
+	ret['song_number'] = song_number
+	return ret
 
 def insert_song(conn, song):
 	para = wrap_song(song)
@@ -90,7 +134,7 @@ def insert_artist(conn, artist, songs):
 		return
 	initials, name, artist_songs = t
 	sql = """INSERT OR IGNORE INTO artist(name, initials, song_number) VALUES (?,?,?)"""
-	c = commit(conn, sql, (name, initials, 0))
+	c = commit(conn, sql, (name, initials, len(artist_songs)))
 	aid = c.lastrowid
 	for s_idx in artist_songs:
 		song = songs[s_idx]
@@ -123,12 +167,35 @@ def list_songs(conn):
 	sql = """SELECT * FROM song ORDER BY initials"""
 	return query(conn, sql)
 
+def browse(conn):
+	sql = """SELECT * FROM song ORDER BY initials"""
+	c = query(conn, sql)
+	songs = c.fetchall()
+	return unwrap_songs(songs)
+
+def search_artist(conn, q):
+	sql = """SELECT * FROM artist WHERE initials LIKE '""" + q + """%'"""
+	c = query(conn, sql)
+	artists = c.fetchall()
+	return unwrap_artists(artists)
+
+def search_song(conn, q):
+	sql = """SELECT * FROM song WHERE song.initials LIKE '""" + q + """%'  ORDER BY song.words, song.rank"""
+	c = query(conn, sql)
+	songs = c.fetchall()
+	return unwrap_songs(songs)
+
+def get_song_by_artist(conn, aid):
+	sql = """SELECT song.* FROM sing, song WHERE aid = ? AND sing.sid = song.id ORDER BY song.words, song.rank"""
+
+	c = query(conn, sql, (str(aid), ))
+	songs = c.fetchall()
+	return unwrap_songs(songs)
+
 def test(conn):
-	q = '刘德华'
-	sql = "SELECT song.* FROM artist, sing, song WHERE artist.name = '%s' AND artist.id = sing.aid and sing.sid = song.id" % q
+	sql = "SELECT song.* FROM artist, sing, song WHERE artist.initials LIKE '%s' AND artist.id = sing.aid and sing.sid = song.id" % 'ldh%'
 	print sql
 	c = query(conn, sql)
-	print dir(c)
 	songs = c.fetchall()
 	for song in songs:
 		print song
